@@ -101,7 +101,7 @@ function resetGame() {
   particles = [];
   score = 0;
   frameCount = 0;
-  pipeTimer = 0;
+  pipeTimer = 70; // spawn first pipe quickly
 }
 
 function flap() {
@@ -350,7 +350,11 @@ function drawDeathScreen() {
 
 function checkCollision() {
   if (bird.y + bird.radius > H - GROUND_HEIGHT) return true;
-  if (bird.y - bird.radius < 0) return true;
+  // Clamp to ceiling instead of killing
+  if (bird.y - bird.radius < 0) {
+    bird.y = bird.radius;
+    bird.vy = 0;
+  }
 
   for (const pipe of pipes) {
     const birdLeft = bird.x - bird.radius;
@@ -446,6 +450,7 @@ function gameLoop() {
 
 // Input
 document.addEventListener('keydown', function(e) {
+  if (e.repeat) return; // prevent held key from rapid-firing flaps
   if (e.code === 'Space' || e.key === ' ') {
     e.preventDefault();
     flap();
