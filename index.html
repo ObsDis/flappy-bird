@@ -21,6 +21,17 @@
     display: block;
     border-radius: 8px;
     box-shadow: 0 0 40px rgba(0,0,0,0.5);
+    width: 400px;
+    height: 600px;
+  }
+  @media (min-width: 900px) and (min-height: 800px) {
+    canvas { width: 520px; height: 780px; }
+  }
+  @media (min-width: 1100px) and (min-height: 950px) {
+    canvas { width: 600px; height: 900px; }
+  }
+  @media (min-width: 1400px) and (min-height: 1100px) {
+    canvas { width: 700px; height: 1050px; }
   }
   .controls {
     margin-top: 14px;
@@ -64,11 +75,22 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 
-// Canvas sizing
+// Canvas sizing — logical W/H stay 400x600 so all gameplay math is unchanged.
+// We bump the backing-store resolution to match the CSS display size at devicePixelRatio
+// so the canvas stays crisp when scaled up on larger screens.
 const W = 400;
 const H = 600;
-canvas.width = W;
-canvas.height = H;
+function resizeCanvas() {
+  const cssW = canvas.clientWidth || W;
+  const cssH = canvas.clientHeight || H;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  // Map logical 0..W, 0..H onto the actual backing store
+  ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
 // Game state
 const STATE = { IDLE: 0, PLAYING: 1, DEAD: 2 };
