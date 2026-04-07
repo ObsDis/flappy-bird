@@ -9,20 +9,56 @@
   body {
     background: #1a1a2e;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     height: 100vh;
     overflow: hidden;
+    font-family: Arial, sans-serif;
+    color: #ddd;
   }
   canvas {
     display: block;
     border-radius: 8px;
     box-shadow: 0 0 40px rgba(0,0,0,0.5);
   }
+  .controls {
+    margin-top: 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 13px;
+  }
+  .controls label {
+    background: #2d2d4a;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .controls label:hover { background: #3d3d6a; }
+  .controls input[type=file] { display: none; }
+  .controls button {
+    background: #2d2d4a;
+    color: #ddd;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .controls button:hover { background: #3d3d6a; }
+  .controls .muted { opacity: 0.5; }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<div class="controls">
+  <label for="avatar-upload">Upload bird image</label>
+  <input type="file" id="avatar-upload" accept="image/*">
+  <button id="reset-avatar">Reset</button>
+  <button id="sound-toggle">Sound: on</button>
+</div>
 
 <script>
 const canvas = document.getElementById('game');
@@ -86,6 +122,59 @@ const COLORS = {
   birdWing: '#e8b730'
 };
 
+// Custom bird avatar (null = use procedural drawing)
+let birdAvatar = null;
+
+// ─── Audio ────────────────────────────────────────────────────────────────
+let audioCtx = null;
+let soundEnabled = true;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { audioCtx = null; }
+  }
+  return audioCtx;
+}
+function playTone(freq, duration, type, gain) {
+  if (!soundEnabled) return;
+  const ac = getAudio();
+  if (!ac) return;
+  if (ac.state === 'suspended') ac.resume();
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = type || 'square';
+  osc.frequency.setValueAtTime(freq, ac.currentTime);
+  g.gain.setValueAtTime(gain || 0.15, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + duration);
+  osc.connect(g).connect(ac.destination);
+  osc.start();
+  osc.stop(ac.currentTime + duration);
+}
+function playFlap() {
+  playTone(520, 0.08, 'square', 0.12);
+  setTimeout(() => playTone(720, 0.06, 'square', 0.10), 30);
+}
+function playScore() {
+  playTone(880, 0.09, 'triangle', 0.14);
+  setTimeout(() => playTone(1320, 0.12, 'triangle', 0.14), 80);
+}
+function playDeath() {
+  if (!soundEnabled) return;
+  const ac = getAudio();
+  if (!ac) return;
+  if (ac.state === 'suspended') ac.resume();
+  const osc = ac.createOscillator();
+  const g = ac.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(440, ac.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(60, ac.currentTime + 0.5);
+  g.gain.setValueAtTime(0.18, ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.5);
+  osc.connect(g).connect(ac.destination);
+  osc.start();
+  osc.stop(ac.currentTime + 0.5);
+}
+
 function getDifficulty() {
   const t = Math.min(score / 80, 1);
   return {
@@ -119,6 +208,7 @@ function flap() {
     state = STATE.PLAYING;
     resetGame();
     bird.vy = FIRST_FLAP_STRENGTH;
+    playFlap();
     return;
   } else if (state === STATE.DEAD) {
     state = STATE.IDLE;
@@ -127,6 +217,7 @@ function flap() {
   }
   if (state === STATE.PLAYING) {
     bird.vy = FLAP_STRENGTH;
+    playFlap();
     for (let i = 0; i < 3; i++) {
       particles.push({
         x: bird.x - 5, y: bird.y + 5,
@@ -227,6 +318,14 @@ function drawBird() {
   ctx.save();
   ctx.translate(bird.x, drawY);
   ctx.rotate(angle);
+
+  // If user uploaded a custom avatar, draw that instead of the procedural bird
+  if (birdAvatar && birdAvatar.complete && birdAvatar.naturalWidth > 0) {
+    const size = (bird.radius + 4) * 2;
+    ctx.drawImage(birdAvatar, -size / 2, -size / 2, size, size);
+    ctx.restore();
+    return;
+  }
 
   ctx.fillStyle = COLORS.bird;
   ctx.beginPath();
@@ -391,6 +490,7 @@ function checkCollision() {
 
 function die() {
   state = STATE.DEAD;
+  playDeath();
   if (score > highScore) highScore = score;
   for (let i = 0; i < 15; i++) {
     particles.push({
@@ -425,6 +525,7 @@ function update() {
     if (!pipes[i].scored && pipes[i].x + PIPE_WIDTH < bird.x) {
       pipes[i].scored = true;
       score++;
+      playScore();
     }
     if (pipes[i].x + PIPE_WIDTH + 10 < 0) {
       pipes.splice(i, 1);
@@ -474,6 +575,34 @@ document.addEventListener('keydown', function(e) {
 });
 canvas.addEventListener('click', flap);
 canvas.addEventListener('touchstart', function(e) { e.preventDefault(); flap(); });
+
+// ─── Avatar upload + sound toggle ────────────────────────────────────────
+const avatarInput = document.getElementById('avatar-upload');
+const resetBtn = document.getElementById('reset-avatar');
+const soundBtn = document.getElementById('sound-toggle');
+
+avatarInput.addEventListener('change', function(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    const img = new Image();
+    img.onload = function() { birdAvatar = img; };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+resetBtn.addEventListener('click', function() {
+  birdAvatar = null;
+  avatarInput.value = '';
+});
+
+soundBtn.addEventListener('click', function() {
+  soundEnabled = !soundEnabled;
+  soundBtn.textContent = 'Sound: ' + (soundEnabled ? 'on' : 'off');
+  soundBtn.classList.toggle('muted', !soundEnabled);
+});
 
 // Start
 gameLoop();
