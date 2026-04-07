@@ -43,18 +43,18 @@ let frameCount = 0;
 
 // Bird
 let bird = { x: 80, y: H / 2, vy: 0, radius: 14 };
-const GRAVITY = 0.45;
-const FLAP_STRENGTH = -7.5;
-const MAX_FALL_SPEED = 10;
+const GRAVITY = 0.32;
+const FLAP_STRENGTH = -6.5;
+const MAX_FALL_SPEED = 8;
 
 // Pipes
 let pipes = [];
 const PIPE_WIDTH = 56;
-const BASE_GAP = 160;
-const MIN_GAP = 90;
-const BASE_SPEED = 2.5;
-const MAX_SPEED = 6;
-const BASE_SPAWN_INTERVAL = 100;
+const BASE_GAP = 180;
+const MIN_GAP = 110;
+const BASE_SPEED = 2.2;
+const MAX_SPEED = 5.5;
+const BASE_SPAWN_INTERVAL = 90;
 const MIN_SPAWN_INTERVAL = 55;
 let pipeTimer = 0;
 
@@ -101,7 +101,10 @@ function resetGame() {
   particles = [];
   score = 0;
   frameCount = 0;
-  pipeTimer = 70; // spawn first pipe quickly
+  pipeTimer = 0;
+  // Spawn first pipe close enough that the player sees it immediately
+  spawnPipe();
+  pipes[0].x = 320;
 }
 
 function flap() {
